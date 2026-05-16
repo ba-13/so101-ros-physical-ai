@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 SO-101 MoveIt Cartesian motion test (moveit_py API).
 

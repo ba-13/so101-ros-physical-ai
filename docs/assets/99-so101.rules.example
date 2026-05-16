@@ -37,14 +37,13 @@
 # Each Feetech servo adapter shows up as /dev/ttyACM* or /dev/ttyUSB*.
 # Use the serial number to distinguish leader from follower.
 
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="XXXX", ENV{ID_MODEL_ID}=="YYYY", ENV{ID_SERIAL_SHORT}=="SERIAL_LEADER",   SYMLINK+="so101_leader",   GROUP="dialout", MODE="0660"
-SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="XXXX", ENV{ID_MODEL_ID}=="YYYY", ENV{ID_SERIAL_SHORT}=="SERIAL_FOLLOWER", SYMLINK+="so101_follower", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="1a86", ENV{ID_MODEL_ID}=="55d3", ENV{ID_SERIAL_SHORT}=="5B14112944",   SYMLINK+="so101_leader",   GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="1a86", ENV{ID_MODEL_ID}=="55d3", ENV{ID_SERIAL_SHORT}=="5B14113899", SYMLINK+="so101_follower", GROUP="dialout", MODE="0660"
 
 # ── Cameras (video4linux) ───────────────────────────────────────────────────
 # USB cameras often register two /dev/video* nodes (video + metadata).
 # ATTR{index}=="0" selects the main video stream on most cameras.
 # If it doesn't work for yours, use /dev/v4l/by-id/*-video-index0 directly.
 
-ACTION=="add|change", SUBSYSTEM=="video4linux", KERNEL=="video*", ENV{ID_SERIAL_SHORT}=="SERIAL_WRIST",    ATTR{index}=="0", SYMLINK+="cam_wrist",    GROUP="video", MODE="0660"
-ACTION=="add|change", SUBSYSTEM=="video4linux", KERNEL=="video*", ENV{ID_SERIAL_SHORT}=="SERIAL_OVERHEAD", ATTR{index}=="0", SYMLINK+="cam_overhead", GROUP="video", MODE="0660"
+ACTION=="add|change", SUBSYSTEM=="video4linux", KERNEL=="video*", ENV{ID_SERIAL_SHORT}=="USB2.0_CAM1",    ATTR{index}=="0", SYMLINK+="cam_wrist",    GROUP="video", MODE="0660"
 

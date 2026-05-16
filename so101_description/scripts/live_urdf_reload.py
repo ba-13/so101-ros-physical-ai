@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Live URDF Reload Node - watches URDF/xacro files and republishes robot_description on changes.
 

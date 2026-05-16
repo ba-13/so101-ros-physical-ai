@@ -8,17 +8,17 @@ def generate_launch_description():
     return LaunchDescription(
         [
             # Overhead camera pose relative to follower base
-            Node(
-                package="tf2_ros",
-                executable="static_transform_publisher",
-                name="tf_overhead_cam",
-                arguments=[
-                    "0.2", "0.0", "0.60",   # x y z (meters)
-                    "0.0", "1.57", "0.0",   # yaw pitch roll (radians)
-                    root,
-                    "static_camera/cam_overhead",
-                ],
-            ),
+            # Node(
+            #     package="tf2_ros",
+            #     executable="static_transform_publisher",
+            #     name="tf_overhead_cam",
+            #     arguments=[
+            #         "0.2", "0.0", "0.60",   # x y z (meters)
+            #         "0.0", "1.57", "0.0",   # yaw pitch roll (radians)
+            #         root,
+            #         "static_camera/cam_overhead",
+            #     ],
+            # ),
 
             # Wrist camera pose relative to end-effector link
             Node(

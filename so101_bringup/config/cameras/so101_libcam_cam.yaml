@@ -22,7 +22,7 @@
     camera: 0
     frame_id: "cam_wrist"
 
-/static_camera/cam_overhead:
-  ros__parameters:
-    camera: 1
-    frame_id: "cam_overhead"
+# /static_camera/cam_overhead:
+#   ros__parameters:
+#     camera: 1
+#     frame_id: "cam_overhead"

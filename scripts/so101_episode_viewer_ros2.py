@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """SO-101 Episode Browser — Rerun RecordingStream + ROS2 bag playback + Gradio UI."""
 
 from __future__ import annotations

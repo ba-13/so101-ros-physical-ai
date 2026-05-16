@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """SO-101 ROS 2 → Rerun bridge: single 3-D view with URDF, TF & camera frustums."""
 from __future__ import annotations
 

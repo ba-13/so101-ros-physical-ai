@@ -46,14 +46,13 @@ from robokin.transformations import (
 )
 from robokin.ui.viser_app import ViserRobotUI
 
-
 EE_FRAME = "gripper_frame_link"
 DT = 1.0 / 50.0
 DWELL_TIME = 0.3
 
 # Deadzone thresholds to avoid gizmo→solver feedback loop
-POS_DEADZONE = 0.001   # 1 mm
-ROT_DEADZONE = 0.005   # ~0.3 deg
+POS_DEADZONE = 0.001  # 1 mm
+ROT_DEADZONE = 0.005  # ~0.3 deg
 
 
 def make_pose(pos_mm, rotvec_rad):
@@ -63,6 +62,12 @@ def make_pose(pos_mm, rotvec_rad):
     return T
 
 
+def get_pose_vector(T: np.ndarray) -> np.ndarray:
+    xyz = T[:3, 3]
+    euler = Rotation.from_matrix(T[:3, :3]).as_euler("xyz")  # Roll, Pitch, Yaw
+    return np.concatenate([xyz, euler])
+
+
 class IKViserSO101Node(Node):
     def __init__(self):
         super().__init__("so101_ik_control_node")
@@ -70,14 +75,12 @@ class IKViserSO101Node(Node):
         # -- Parameters --
         self.declare_parameter("joints_topic", "/follower/joint_states")
         self.declare_parameter("cmd_topic", "/follower/forward_controller/commands")
-        self.declare_parameter("use_cameras", False)
+        self.declare_parameter("use_cameras", True)
         self.declare_parameter("cam_wrist_topic", "/follower/image_raw")
-        self.declare_parameter("cam_overhead_topic", "/static_camera/image_raw")
         joints_topic = self.get_parameter("joints_topic").value
         cmd_topic = self.get_parameter("cmd_topic").value
         self.use_cameras = self.get_parameter("use_cameras").value
         cam_wrist_topic = self.get_parameter("cam_wrist_topic").value
-        cam_overhead_topic = self.get_parameter("cam_overhead_topic").value
 
         # -- Load robot model --
         model = load_robot_description("so_arm101_description")
@@ -93,16 +96,19 @@ class IKViserSO101Node(Node):
         self.joint_names = self.solver.joint_names
 
         # Rest configuration
-        self.Q_REST = self.solver.make_configuration({
-            "shoulder_pan": 0.0,
-            "shoulder_lift": -np.pi / 2,
-            "elbow_flex": np.pi / 2,
-            "wrist_flex": np.deg2rad(42.97),
-            "wrist_roll": 0.0,
-        })
+        self.Q_REST = self.solver.make_configuration(
+            {
+                "shoulder_pan": 0.0,
+                "shoulder_lift": -np.pi / 2,
+                "elbow_flex": np.pi / 2,
+                "wrist_flex": np.deg2rad(42.97),
+                "wrist_roll": 0.0,
+            }
+        )
         self.solver.set_joint_state(self.Q_REST)
         q_init = self.Q_REST.copy()
         T_init = self.solver.current_pose()
+        print(get_pose_vector(T_init))
         self.T_REST = T_init.copy()
 
         # Preset poses
@@ -148,7 +154,50 @@ class IKViserSO101Node(Node):
 
         # Buttons
         self._loop_btn = self.server.gui.add_button("Run loop")
+        self.record_btn = self.server.gui.add_button("Record Pose")
+        self.print_btn = self.server.gui.add_button("Print Limits")
         rest_btn = self.server.gui.add_button("Rest")
+        self.recorded_poses = []
+
+        @self.record_btn.on_click
+        def _(event) -> None:
+            T = self.solver.current_pose()
+            pose_vec = get_pose_vector(T)
+            self.recorded_poses.append(pose_vec)
+            print(
+                f"Recorded pose {len(self.recorded_poses)}:\n  XYZ: {pose_vec[:3]}\n  RPY: {pose_vec[3:]}\n"
+            )
+
+        @self.print_btn.on_click
+        def _(event) -> None:
+            if not self.recorded_poses:
+                print("No poses recorded yet. Move the arm and click 'Record Pose'.")
+                return
+
+            poses_arr = np.array(self.recorded_poses)
+            min_vals = poses_arr.min(axis=0)
+            max_vals = poses_arr.max(axis=0)
+
+            # Calculate center (target) and deltas
+            center = (min_vals + max_vals) / 2.0
+            limit_high = max_vals - center
+            limit_low = center - min_vals
+
+            print("\n" + "=" * 50)
+            print("WORKSPACE LIMITS FOR POLICY")
+            print("=" * 50)
+            print("import numpy as np\n")
+            print(
+                f"TARGET_POSE = np.array([{center[0]:.6f}, {center[1]:.6f}, {center[2]:.6f}, {center[3]:.6f}, {center[4]:.6f}, {center[5]:.6f}])"
+            )
+
+            print(
+                f"ABS_POSE_LIMIT_HIGH = TARGET_POSE + np.array([{limit_high[0]:.6f}, {limit_high[1]:.6f}, {limit_high[2]:.6f}, {limit_high[3]:.6f}, {limit_high[4]:.6f}, {limit_high[5]:.6f}])"
+            )
+            print(
+                f"ABS_POSE_LIMIT_LOW = TARGET_POSE - np.array([{limit_low[0]:.6f}, {limit_low[1]:.6f}, {limit_low[2]:.6f}, {limit_low[3]:.6f}, {limit_low[4]:.6f}, {limit_low[5]:.6f}])"
+            )
+            print("=" * 50 + "\n")
 
         @self._loop_btn.on_click
         def _(event):
@@ -172,9 +221,8 @@ class IKViserSO101Node(Node):
 
         # Camera image panels in Viser
         self._cam_wrist_handle = None
-        self._cam_overhead_handle = None
         if self.use_cameras:
-            self.get_logger().info(f"  Cameras enabled: {cam_wrist_topic}, {cam_overhead_topic}")
+            self.get_logger().info(f"  Cameras enabled: {cam_wrist_topic}")
 
         # -- Latest arm state from hardware --
         self.q_measured = q_init.copy()
@@ -199,9 +247,6 @@ class IKViserSO101Node(Node):
             self.cam_wrist_sub = self.create_subscription(
                 Image, cam_wrist_topic, self._cam_wrist_cb, sensor_qos
             )
-            self.cam_overhead_sub = self.create_subscription(
-                Image, cam_overhead_topic, self._cam_overhead_cb, sensor_qos
-            )
 
         # -- ROS2 publisher for arm commands --
         self.cmd_pub = self.create_publisher(Float64MultiArray, cmd_topic, 10)
@@ -222,7 +267,7 @@ class IKViserSO101Node(Node):
         self.has_arm_feedback = True
 
         if not self._initialized_from_arm:
-            self.solver.set_joint_state(q)
+            self.solver.set_joint_state(q)  # TODO: may need to do this again
             T = self.solver.current_pose()
             self.ui.sync_from_solver(self.solver, move_gizmo=True)
             self._last_gizmo_T = T.copy()
@@ -230,30 +275,22 @@ class IKViserSO101Node(Node):
             self.get_logger().info("Initialized from arm — http://localhost:8080")
 
     def _cam_wrist_cb(self, msg: Image):
-        img = np.frombuffer(msg.data, dtype=np.uint8).reshape(
-            msg.height, msg.width, -1
-        )
+        img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)
         if self._cam_wrist_handle is None:
             self._cam_wrist_handle = self.server.gui.add_image(
-                img, label="Wrist Camera", format="jpeg", jpeg_quality=75,
+                img,
+                label="Wrist Camera",
+                format="jpeg",
+                jpeg_quality=75,
             )
         else:
             self._cam_wrist_handle.image = img
 
-    def _cam_overhead_cb(self, msg: Image):
-        img = np.frombuffer(msg.data, dtype=np.uint8).reshape(
-            msg.height, msg.width, -1
-        )
-        if self._cam_overhead_handle is None:
-            self._cam_overhead_handle = self.server.gui.add_image(
-                img, label="Overhead Camera", format="jpeg", jpeg_quality=75,
-            )
-        else:
-            self._cam_overhead_handle.image = img
-
     def _start_segment(self, T_goal: np.ndarray):
         """Start a smooth trajectory from current pose to T_goal."""
-        q_meas = self.q_measured if self.has_arm_feedback else self.solver.get_joint_state()
+        q_meas = (
+            self.q_measured if self.has_arm_feedback else self.solver.get_joint_state()
+        )
         T_start = self.solver.fk(q_meas)
         n_steps = compute_segment_steps_from_speed(
             T_start=T_start,
@@ -280,7 +317,11 @@ class IKViserSO101Node(Node):
                 1.0 if self._segment_duration <= 0 else elapsed / self._segment_duration
             )
             T_ref = interpolate_pose(self._segment_T_start, self._segment_T_goal, alpha)
-            q_seed = self.q_measured if self.has_arm_feedback else self.solver.get_joint_state()
+            q_seed = (
+                self.q_measured
+                if self.has_arm_feedback
+                else self.solver.get_joint_state()
+            )
             q = self.solver.servo_step(q_seed, T_ref)
             self.solver.set_joint_state(q)
             self.ui.sync_from_solver(self.solver, move_gizmo=False)
@@ -298,7 +339,9 @@ class IKViserSO101Node(Node):
             # Dwell between loop segments
             if time.perf_counter() - self._loop_dwell_t0 >= DWELL_TIME:
                 self._loop_dwelling = False
-                self._loop_pose_idx = (self._loop_pose_idx + 1) % len(self._pose_loop_list)
+                self._loop_pose_idx = (self._loop_pose_idx + 1) % len(
+                    self._pose_loop_list
+                )
                 name, T_goal = self._pose_loop_list[self._loop_pose_idx]
                 self.get_logger().info(f"loop -> {name}")
                 self._start_segment(T_goal)
@@ -315,7 +358,11 @@ class IKViserSO101Node(Node):
             # IK gizmo mode — only re-solve when user actually dragged the gizmo
             T_target = self.ui.get_target_pose()
             if self._gizmo_moved(T_target):
-                q_seed = self.q_measured if self.has_arm_feedback else self.solver.get_joint_state()
+                q_seed = (
+                    self.q_measured
+                    if self.has_arm_feedback
+                    else self.solver.get_joint_state()
+                )
                 q = self.solver.servo_step(q_seed, T_target)
                 self.solver.set_joint_state(q)
                 self.ui.sync_from_solver(self.solver, move_gizmo=True)

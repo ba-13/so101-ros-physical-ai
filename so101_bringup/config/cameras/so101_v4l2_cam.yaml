@@ -25,8 +25,8 @@
     frame_id: "cam_wrist"
     camera_name: "cam_wrist"
 
-/static_camera/cam_overhead:
-  ros__parameters:
-    video_device: "/dev/cam_overhead"
-    frame_id: "cam_overhead"
-    camera_name: "cam_overhead"
+# /static_camera/cam_overhead:
+#   ros__parameters:
+#     video_device: "/dev/cam_overhead"
+#     frame_id: "cam_overhead"
+#     camera_name: "cam_overhead"
